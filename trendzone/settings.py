@@ -1,8 +1,15 @@
 from pathlib import Path
+import os
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-dudefashion-change-in-production'
-DEBUG = True
-ALLOWED_HOSTS = ['*']
+
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dudefashion-change-in-production')
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -12,8 +19,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'shop',
 ]
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # <-- ADD THIS
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -21,8 +30,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
 MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 ROOT_URLCONF = 'trendzone.urls'
+
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
     'DIRS': [BASE_DIR / 'shop' / 'templates'],
@@ -33,16 +44,41 @@ TEMPLATES = [{
         'django.contrib.messages.context_processors.messages',
     ]},
 }]
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+
+# Database — uses PostgreSQL on Render, SQLite locally
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+
+# Static files
 STATIC_URL  = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'          # <-- ADD THIS for collectstatic
 STATICFILES_DIRS = [BASE_DIR / 'shop' / 'static']
-MEDIA_URL   = '/media/'
-MEDIA_ROOT  = BASE_DIR / 'media'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Media / Cloudinary
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY':    os.environ.get('CLOUDINARY_API_KEY'),
+    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET'),
+}
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+MEDIA_URL = '/media/'
+
+# Proxy / HTTPS fix for Render
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-SESSION_COOKIE_AGE = 86400 * 30   # 30 days — stay logged in
-SESSION_SAVE_EVERY_REQUEST = True  # refresh expiry on every request
+
+SESSION_COOKIE_AGE = 86400 * 30
+SESSION_SAVE_EVERY_REQUEST = True
